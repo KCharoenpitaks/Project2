@@ -45,9 +45,9 @@ def getState(closeprice, volume, t, n):
         #res.append(sigmoid(math.log(block[0 + 1],block[0])))
         #res.append(math.log(block[0 + 1],block[0])*100)
     for j in range(n - 1):
-        #res.append((sigmoid((Volume[0 + 1] - Volume[0]))))
-        #res.append(sigmoid(math.log(Volume[0 + 1],Volume[0])))
-        res.append(math.log(Volume[0 + 1],Volume[0])*100)
+        res.append((sigmoid((Volume[j + 1] - Volume[j]))))
+        #res.append(sigmoid(math.log(Volume[j + 1],Volume[j])))
+        #res.append(math.log(Volume[j + 1],Volume[j])*100)
     return np.array([res])
 
 
