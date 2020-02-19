@@ -1,0 +1,129 @@
+from torch.distributions.categorical import Categorical
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+
+import matplotlib.pyplot as plt
+from utils import *
+from Model import *
+import pandas as pd
+from sklearn.metrics import confusion_matrix
+
+############ Hyper parameters
+INPUT_SIZE = 30 #ดูย้อนหลังกี่วัน
+HIDDEN_SIZE = 64
+NUM_LAYERS = 2
+OUTPUT_SIZE = 1
+learning_rate = 0.001
+num_epochs = 100000
+loop = 10
+########### Importing the training set
+
+dataset_train = pd.read_csv('Bond_Yield_Dataset.csv')
+
+Y = dataset_train.iloc[:, 2].to_numpy()
+X = dataset_train.iloc[:, 1].to_numpy()
+
+Mode = "Classifier" #['Classifier','RNN']
+
+Results = []
+######## normalization
+for i in range (loop):
+    X_rms = RunningMeanStd()
+    X_rms.update(X)
+    X_norm = (X - X_rms.mean)/X_rms.var
+    X_train = []
+    Y_train = []
+    
+    ################# Prepare Data
+    
+    for i in range (len(dataset_train)):
+        if i- INPUT_SIZE>= INPUT_SIZE:
+            X_train.append(X_norm[i-INPUT_SIZE:i])
+            Y_train.append(Y[i])
+    
+    X_train = torch.tensor(X_train, requires_grad=True).float()
+    Y_train = torch.tensor(Y_train).long()
+    #print("X_train shape =",X_train.shape)
+    #print("Y_train shape =",Y_train.shape)
+    
+    ###################+++++++++++++++
+    if Mode == "Classifier":
+        Model = Classifier(INPUT_SIZE,HIDDEN_SIZE,NUM_LAYERS,OUTPUT_SIZE)# Classifier
+    elif Mode == "RNN":
+        Model = RNN(INPUT_SIZE,HIDDEN_SIZE,NUM_LAYERS,OUTPUT_SIZE) # RNN
+    ########################
+    optimiser = torch.optim.Adam(Model.parameters(), lr=learning_rate)
+    
+    #C_loss = nn.MSELoss()#nn.BCELoss(size_average=True)#nn.CrossEntropyLoss() #nn.MSELoss()
+    
+    hidden = torch.zeros(1,HIDDEN_SIZE)
+    #print("hidden shape =",hidden.shape)
+    #X_train.view(1,-1,INPUT_SIZE).shape
+    hidden.shape
+    for epoch in range(num_epochs):
+        
+        ############################+++++++++++++
+        if Mode == "Classifier":
+            output = Model.forward(X_train.view(1,-1,INPUT_SIZE)) #for Classifier
+            Y_train = Y_train.view(1,-1,1)
+            loss = F.binary_cross_entropy_with_logits(output.float(),Y_train.float()) #F.mse_loss(output.float(),Y_train.float())
+            #loss = torch.tensor(BCE_loss(output.data.numpy(),Y_train.data.numpy()))
+        
+        elif Mode == "RNN":
+            loss = 0
+            outs2 = []
+            for i in range (len(Y_train)):
+                X_train[1].view(1,-1).shape
+                output, hn = Model.forward(X_train[i].view(1,-1)) #for RNN
+                loss += F.binary_cross_entropy_with_logits(output.float(),Y_train[i].view(1,-1).float())
+                #X_train[1].view(1,-1)
+                #print(output)
+                if epoch == ((num_epochs)-1):
+                    outs2.append(output[0].data.numpy())
+            #outs = np.array(outs)
+            outs=[]
+            for i in range (len(outs2)):
+                if outs2[i] >=0.5:
+                    outs.append(1)
+                else:
+                    outs.append(0)
+            outs = np.array(outs)
+            loss = loss.clone()/len(Y_train)
+            optimiser.zero_grad()
+            loss.backward()
+            optimiser.step()      
+            print('epoch {}, loss {}'.format(epoch,loss.item()))
+        
+            
+            #print("loss =",loss)
+        
+        #######
+        if Mode == "Classifier":
+            optimiser.zero_grad()
+            loss.backward()
+            optimiser.step()      
+            print('epoch {}, loss {}'.format(epoch,loss.item()))
+        
+        
+    ########## Classifier
+        #########+++++++++++++++++++
+    if Mode == "Classifier":
+        output = output.view(-1)
+        output = output.data.numpy()
+        outs = []
+        for i in range (len(output)):
+            if output[i] >=0.5:
+                outs.append(1)
+            else:
+                outs.append(0)
+        outs = np.array(outs)
+    
+    #################################++++++++++++++++
+    Y_train = Y_train.view(-1)
+    y_train = Y_train.data.numpy()
+    accuracy = confusion_matrix(y_train,outs)
+    acc = (accuracy[0][0]+accuracy[1][1])/np.sum(accuracy)
+    print("accuray = ", acc)
+    Results.append(acc)
